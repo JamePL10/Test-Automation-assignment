@@ -1,0 +1,67 @@
+pipeline {
+    agent any
+
+    environment {
+        PYTHONPATH = "${WORKSPACE}"
+    }
+
+    stages {
+
+        stage('Checkout Code From Git') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/your-org/minimal-todo-automation.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    python3 --version
+                    pip3 install --upgrade pip
+                    pip3 install -r requirements.txt
+                '''
+            }
+        }
+
+        stage('Run Test Automate') {
+            steps {
+                sh '''
+                    echo "Starting Appium Server"
+                    appium --log-level error &
+                    sleep 10
+
+                    echo "Running Robot Framework Tests"
+                    robot \
+                      --outputdir results \
+                      --log log.html \
+                      --report report.html \
+                      --output output.xml \
+                      .
+                '''
+            }
+        }
+
+        stage('Send Result To Jenkins') {
+            steps {
+                robot outputPath: 'results/output.xml',
+                      logFileName: 'log.html',
+                      reportFileName: 'report.html',
+                      disableArchiveOutput: false,
+                      passThreshold: 100.0
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'results/**', fingerprint: true
+        }
+        failure {
+            echo 'Automation Test Failed'
+        }
+        success {
+            echo 'Automation Test Passed'
+        }
+    }
+}
